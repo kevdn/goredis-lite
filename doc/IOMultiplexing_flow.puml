@@ -1,0 +1,64 @@
+@startuml
+autonumber
+actor Client
+
+participant "server.go\nRunIoMultiplexingServer" as S
+participant "TCP Listener\n(serverFd)" as L
+participant "IOMultiplexer\n(Epoll|KQueue)" as M
+participant "Kernel" as K
+participant "Client Conn\n(connFd)" as C
+
+== Startup ==
+S -> L: net.Listen("tcp", ":3000")
+S -> L: File().Fd() -> serverFd:int
+S -> M: CreateIOMultiplexer()
+note right of M
+  Linux: EpollCreate1 -> Epoll{fd, buffers}
+  macOS: kqueue -> KQueue{fd, buffers}
+end note
+
+== Register serverFd ==
+S -> M: Monitor(Event{Fd: serverFd, Op: OpRead})
+group Linux
+  M -> M: toNative(Event)->EpollEvent{Fd:int32, Events:EPOLLIN}
+  M -> K: epoll_ctl(epfd, ADD, serverFd, &EpollEvent)
+end
+group macOS
+  M -> M: toNative(Event, EV_ADD)->Kevent_t{Ident:uint64, Filter:EVFILT_READ}
+  M -> K: kevent(kqfd, &Kevent_t[EV_ADD], nil, nil)
+end
+
+== Event loop ==
+loop forever
+  S -> M: Wait()
+  group Linux
+    M -> K: epoll_wait(epfd, epollEvents, -1)
+    K --> M: epollEvents[0..n-1]
+    M -> M: createEvent(EpollEvent)->Event{Fd, Op}
+  end
+  group macOS
+    M -> K: kevent(kqfd, nil, kqEvents, nil)
+    K --> M: kqEvents[0..n-1]
+    M -> M: createEvent(Kevent_t)->Event{Fd, Op}
+  end
+  M --> S: []Event ready
+  == Dispatch per event ==
+  loop for each Event e
+    alt e.Fd == serverFd (new connection pending)
+      S -> L: Accept(serverFd)
+      L --> S: connFd:int
+      S -> M: Monitor(Event{Fd: connFd, Op: OpRead})
+      note right
+        New client is now monitored for read
+      end note
+    else e.Fd is a client fd (readable)
+      S -> C: syscall.Read(connFd, buf)
+      alt read == 0 or error in [EOF, ECONNRESET]
+        S -> C: syscall.Close(connFd)
+      else data received
+        S -> C: syscall.Write(connFd, data)  // echo
+      end
+    end
+  end
+end
+@enduml
