@@ -85,6 +85,66 @@ func cmdTTL(args []string) []byte {
 	return Encode(int64(remainMs/1000), false)
 }
 
+func cmdEXPIRE(args []string) []byte {
+	if len(args) != 2 {
+		return Encode(errors.New("ERR wrong number of arguments for 'expire' command"), false)
+	}
+
+	key := args[0]
+	
+	ttlSec, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return Encode(errors.New("ERR value is not an integer or out of range"), false)
+	}
+
+	obj := dictStore.Get(key)
+	if obj == nil {
+		return constant.RespZero // Key doesn't exist, return 0
+	}
+
+	dictStore.SetExpiry(key, ttlSec*1000)
+	return constant.RespOne // Successfully set expiration, return 1
+}
+
+func cmdDEL(args []string) []byte {
+	if len(args) == 0 {
+		return Encode(errors.New("ERR wrong number of arguments for 'del' command"), false)
+	}
+
+	var deletedCount int64 = 0
+	
+	for _, key := range args {
+		// Check if key exists and is not expired before deleting
+		obj := dictStore.Get(key)
+		if obj != nil {
+			if dictStore.Del(key) {
+				deletedCount++
+			}
+		}
+	}
+
+	return Encode(deletedCount, false)
+}
+
+func cmdEXISTS(args []string) []byte {
+	if len(args) == 0 {
+		return Encode(errors.New("ERR wrong number of arguments for 'exists' command"), false)
+	}
+
+	var existsCount int64 = 0
+	
+	// EXISTS can check multiple keys at once
+	// Returns count of how many keys exist
+	for _, key := range args {
+		obj := dictStore.Get(key)
+		if obj != nil {
+			existsCount++
+		}
+	}
+
+	return Encode(existsCount, false)
+}
+
 // ExecuteAndResponse given a Command, executes it and responses
 func ExecuteAndResponse(cmd *Command, connFd int) error {
 	var res []byte
@@ -98,6 +158,12 @@ func ExecuteAndResponse(cmd *Command, connFd int) error {
 		res = cmdGET(cmd.Args)
 	case "TTL":
 		res = cmdTTL(cmd.Args)
+	case "EXPIRE":
+		res = cmdEXPIRE(cmd.Args)
+	case "DEL":
+		res = cmdDEL(cmd.Args)
+	case "EXISTS":
+		res = cmdEXISTS(cmd.Args)
 	default:
 		res = []byte(fmt.Sprintf("-CMD NOT FOUND\r\n"))
 	}
