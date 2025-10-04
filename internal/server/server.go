@@ -2,23 +2,27 @@ package server
 
 import (
 	"goredis-lite/internal/config"
+	"goredis-lite/internal/constant"
+	"goredis-lite/internal/core"
 	"goredis-lite/internal/core/io_multiplexing"
 	"io"
 	"log"
 	"net"
 	"syscall"
+	"time"
 )
 
-func readCommand(fd int) (string, error) {
+func readCommand(fd int) (*core.Command, error) {
 	var buf = make([]byte, 512)
 	n, err := syscall.Read(fd, buf)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if n == 0 {
-		return "", io.EOF
+		return nil, io.EOF
 	}
-	return string(buf[:n]), nil
+	
+	return core.ParseCmd(buf)
 }
 
 func respond(data string, fd int) error {
@@ -29,7 +33,7 @@ func respond(data string, fd int) error {
 }
 
 func RunIoMultiplexingServer() {
-	log.Println("starting an I/O Multiplexing TCP server at", config.Port)
+	log.Println("starting an I/O Multiplexing TCP server on", config.Port)
 	listener, err := net.Listen(config.Protocol, config.Port)
 	if err != nil {
 		log.Fatal(err)
@@ -65,7 +69,13 @@ func RunIoMultiplexingServer() {
 	}
 
 	var events = make([]io_multiplexing.Event, config.MaxConnection)
+	var lastActiveExpireExecTime = time.Now()
 	for {
+		// Check last execution time and call if it is more than 100ms ago.
+		if time.Now().After(lastActiveExpireExecTime.Add(constant.ActiveExpireFrequency)) {
+			core.ActiveDeleteExpiredKeys()
+			lastActiveExpireExecTime = time.Now()
+		}
 		// wait for file descriptors in the monitoring list to be ready for I/O
 		// it is a blocking call.
 		events, err = ioMultiplexer.Wait()
@@ -76,7 +86,6 @@ func RunIoMultiplexingServer() {
 		for i := 0; i < len(events); i++ {
 			if events[i].Fd == serverFd {
 				log.Printf("new client is trying to connect")
-				// set up new connection
 				connFd, _, err := syscall.Accept(serverFd)
 				if err != nil {
 					log.Println("err", err)
@@ -92,7 +101,6 @@ func RunIoMultiplexingServer() {
 				}
 			} else {
 				cmd, err := readCommand(events[i].Fd)
-				// log.Println("command: ", cmd)
 				if err != nil {
 					if err == io.EOF || err == syscall.ECONNRESET {
 						log.Println("client disconnected")
@@ -102,7 +110,7 @@ func RunIoMultiplexingServer() {
 					log.Println("read error:", err)
 					continue
 				}
-				if err = respond(cmd, events[i].Fd); err != nil {
+				if err = core.ExecuteAndResponse(cmd, events[i].Fd); err != nil {
 					log.Println("err write:", err)
 				}
 			}
