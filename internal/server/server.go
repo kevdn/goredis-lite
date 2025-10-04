@@ -77,8 +77,7 @@ func RunIoMultiplexingServer() {
 			lastActiveExpireExecTime = time.Now()
 		}
 		// wait for file descriptors in the monitoring list to be ready for I/O
-		// it is a blocking call.
-		events, err = ioMultiplexer.Wait()
+		events, err = ioMultiplexer.Wait(constant.IOMultiplexerTimeout)
 		if err != nil {
 			continue
 		}

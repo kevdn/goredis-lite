@@ -6,6 +6,7 @@ import (
 	"goredis-lite/internal/config"
 	"log"
 	"syscall"
+	"time"
 )
 
 type Epoll struct {
@@ -34,8 +35,9 @@ func (ep *Epoll) Monitor(event Event) error {
 	return syscall.EpollCtl(ep.fd, syscall.EPOLL_CTL_ADD, event.Fd, &epollEvent)
 }
 
-func (ep *Epoll) Wait() ([]Event, error) {
-	n, err := syscall.EpollWait(ep.fd, ep.epollEvents, -1)
+func (ep *Epoll) Wait(timeout time.Duration) ([]Event, error) {
+	timeoutMs := int(timeout / time.Millisecond)
+	n, err := syscall.EpollWait(ep.fd, ep.epollEvents, timeoutMs)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"goredis-lite/internal/config"
 	"log"
 	"syscall"
+	"time"
 )
 
 type KQueue struct {
@@ -35,8 +36,16 @@ func (kq *KQueue) Monitor(event Event) error {
 	return err
 }
 
-func (kq *KQueue) Wait() ([]Event, error) {
-	n, err := syscall.Kevent(kq.fd, nil, kq.kqEvents, nil)
+func (kq *KQueue) Wait(timeout time.Duration) ([]Event, error) {
+	var timeoutSpec *syscall.Timespec
+	if timeout > 0 {
+		timeoutSpec = &syscall.Timespec{
+			Sec:  int64(timeout / time.Second),
+			Nsec: int64((timeout % time.Second) / time.Nanosecond),
+		}
+	}
+	
+	n, err := syscall.Kevent(kq.fd, nil, kq.kqEvents, timeoutSpec)
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,7 @@
 package io_multiplexing
 
+import "time"
+
 const OpRead = 0
 const OpWrite = 1
 
@@ -12,6 +14,6 @@ type Event struct {
 
 type IOMultiplexer interface {
 	Monitor(event Event) error
-	Wait() ([]Event, error)
+	Wait(timeout time.Duration) ([]Event, error)
 	Close() error
 }
