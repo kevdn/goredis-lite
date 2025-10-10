@@ -7,6 +7,7 @@ var (
 	zsetStore map[string]*data_structure.SortedSet
 	setStore  map[string]*data_structure.SimpleSet
 	cmsStore  map[string]*data_structure.CMS
+	bloomStore map[string]*data_structure.Bloom
 )
 
 func init() {
@@ -14,4 +15,5 @@ func init() {
 	zsetStore = make(map[string]*data_structure.SortedSet)
 	setStore = make(map[string]*data_structure.SimpleSet)
 	cmsStore = make(map[string]*data_structure.CMS)
+	bloomStore = make(map[string]*data_structure.Bloom)
 }
