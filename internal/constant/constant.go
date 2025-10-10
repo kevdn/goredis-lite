@@ -13,3 +13,4 @@ var ActiveExpireSampleSize = 20 // https://blog.x.com/engineering/en_us/topics/i
 var ActiveExpireThreshold = 0.25 // https://engineering.grab.com/a-key-expired-in-redis-you-wont-believe-what-happened-next
 var MaxActiveExpireExecutionTime = 25 * time.Millisecond // https://groups.google.com/g/redis-db/c/tF1cIg-bXS0
 var IOMultiplexerTimeout = 50 * time.Millisecond 
+var DefaultBPlusTreeDegree = 64 // https://timmastny.com/blog/tuning-b-plus-trees/

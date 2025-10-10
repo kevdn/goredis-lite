@@ -1,12 +1,13 @@
 package core
 
 import (
-	"goredis-lite/internal/constant"
 	"errors"
 	"fmt"
 	"strconv"
 	"syscall"
 	"time"
+
+	"goredis-lite/internal/constant"
 )
 
 func cmdPING(args []string) []byte {
@@ -91,7 +92,7 @@ func cmdEXPIRE(args []string) []byte {
 	}
 
 	key := args[0]
-	
+
 	ttlSec, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
 		return Encode(errors.New("ERR value is not an integer or out of range"), false)
@@ -112,7 +113,7 @@ func cmdDEL(args []string) []byte {
 	}
 
 	var deletedCount int64 = 0
-	
+
 	for _, key := range args {
 		// Check if key exists and is not expired before deleting
 		obj := dictStore.Get(key)
@@ -132,7 +133,7 @@ func cmdEXISTS(args []string) []byte {
 	}
 
 	var existsCount int64 = 0
-	
+
 	// EXISTS can check multiple keys at once
 	// Returns count of how many keys exist
 	for _, key := range args {
@@ -164,6 +165,20 @@ func ExecuteAndResponse(cmd *Command, connFd int) error {
 		res = cmdDEL(cmd.Args)
 	case "EXISTS":
 		res = cmdEXISTS(cmd.Args)
+	case "ZADD":
+		res = cmdZADD(cmd.Args)
+	case "ZSCORE":
+		res = cmdZSCORE(cmd.Args)
+	case "ZRANK":
+		res = cmdZRANK(cmd.Args)
+	case "SADD":
+		res = cmdSADD(cmd.Args)
+	case "SREM":
+		res = cmdSREM(cmd.Args)
+	case "SMEMBERS":
+		res = cmdSMEMBERS(cmd.Args)
+	case "SISMEMBER":
+		res = cmdSISMEMBER(cmd.Args)
 	default:
 		res = []byte(fmt.Sprintf("-CMD NOT FOUND\r\n"))
 	}
