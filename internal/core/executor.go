@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"goredis-lite/internal/constant"
+	"goredis-lite/internal/data_structure"
 )
 
 func cmdPING(args []string) []byte {
@@ -146,6 +148,13 @@ func cmdEXISTS(args []string) []byte {
 	return Encode(existsCount, false)
 }
 
+func cmdINFO(args []string) []byte {
+	buf := &bytes.Buffer{}
+	buf.WriteString("# Keyspace\r\n")
+	buf.WriteString(fmt.Sprintf("db0:keys=%d,expires=0,avg_ttl=0\r\n", data_structure.HashKeySpaceStat.Key))
+	return Encode(buf.String(), false)
+}
+
 // ExecuteAndResponse given a Command, executes it and responses
 func ExecuteAndResponse(cmd *Command, connFd int) error {
 	var res []byte
@@ -165,6 +174,8 @@ func ExecuteAndResponse(cmd *Command, connFd int) error {
 		res = cmdDEL(cmd.Args)
 	case "EXISTS":
 		res = cmdEXISTS(cmd.Args)
+	case "INFO":
+		res = cmdINFO(cmd.Args)
 	case "ZADD":
 		res = cmdZADD(cmd.Args)
 	case "ZSCORE":
