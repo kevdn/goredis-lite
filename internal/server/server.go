@@ -1,19 +1,25 @@
 package server
 
 import (
+	"io"
+	"log"
+	"net"
+	"os"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+
 	"goredis-lite/internal/config"
 	"goredis-lite/internal/constant"
 	"goredis-lite/internal/core"
 	"goredis-lite/internal/core/io_multiplexing"
-	"io"
-	"log"
-	"net"
-	"syscall"
-	"time"
 )
 
+var serverStatus int32 = constant.ServerStatusIdle
+
 func readCommand(fd int) (*core.Command, error) {
-	var buf = make([]byte, 512)
+	buf := make([]byte, 512)
 	n, err := syscall.Read(fd, buf)
 	if err != nil {
 		return nil, err
@@ -21,7 +27,7 @@ func readCommand(fd int) (*core.Command, error) {
 	if n == 0 {
 		return nil, io.EOF
 	}
-	
+
 	return core.ParseCmd(buf)
 }
 
@@ -32,7 +38,22 @@ func respond(data string, fd int) error {
 	return nil
 }
 
-func RunIoMultiplexingServer() {
+func WaitForSignal(wg *sync.WaitGroup, signals chan os.Signal) {
+	defer wg.Done()
+	// Wait for signal in channel, it not available then wait
+	<-signals
+	// Busy loop
+	for {
+		if atomic.CompareAndSwapInt32(&serverStatus, constant.ServerStatusIdle, constant.ServerStatusShuttingDown) {
+			// The swap was successful! We have now claimed the shutdown state.
+			log.Println("Shutting down gracefully")
+			os.Exit(0)
+		}
+	}
+}
+
+func RunIoMultiplexingServer(wg *sync.WaitGroup) {
+	defer wg.Done()
 	log.Println("starting an I/O Multiplexing TCP server on", config.Port)
 	listener, err := net.Listen(config.Protocol, config.Port)
 	if err != nil {
@@ -68,20 +89,37 @@ func RunIoMultiplexingServer() {
 		log.Fatal(err)
 	}
 
-	var events = make([]io_multiplexing.Event, config.MaxConnection)
-	var lastActiveExpireExecTime = time.Now()
-	for {
+	events := make([]io_multiplexing.Event, config.MaxConnection)
+	lastActiveExpireExecTime := time.Now()
+	for atomic.LoadInt32(&serverStatus) != constant.ServerStatusShuttingDown {
 		// Check last execution time and call if it is more than 100ms ago.
 		if time.Now().After(lastActiveExpireExecTime.Add(constant.ActiveExpireFrequency)) {
-			core.ActiveDeleteExpiredKeys()
+			if !atomic.CompareAndSwapInt32(&serverStatus, constant.ServerStatusIdle, constant.ServerStatusBusy) {
+				if serverStatus == constant.ServerStatusShuttingDown {
+					return
+				}
+			}
+			core.ActiveDeleteExpiredKeys() // Busy
+			atomic.SwapInt32(&serverStatus, constant.ServerStatusIdle)
+			// Idle
 			lastActiveExpireExecTime = time.Now()
 		}
 		// wait for file descriptors in the monitoring list to be ready for I/O
+		// Idle
 		events, err = ioMultiplexer.Wait(constant.IOMultiplexerTimeout)
 		if err != nil {
 			continue
 		}
 
+		// Goroutine #2 is gracefully shutdown
+		// means: serverStatus == ServerStatusShuttingDown
+		if !atomic.CompareAndSwapInt32(&serverStatus, constant.ServerStatusIdle, constant.ServerStatusBusy) {
+			if serverStatus == constant.ServerStatusShuttingDown {
+				return
+			}
+		}
+
+		// Busy
 		for i := 0; i < len(events); i++ {
 			if events[i].Fd == serverFd {
 				log.Printf("new client is trying to connect")
@@ -114,5 +152,7 @@ func RunIoMultiplexingServer() {
 				}
 			}
 		}
+		// Idle
+		atomic.SwapInt32(&serverStatus, constant.ServerStatusIdle)
 	}
 }

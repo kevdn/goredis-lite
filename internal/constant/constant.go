@@ -21,3 +21,9 @@ const (
 	BfDefaultInitCapacity = 100
 	BfDefaultErrRate      = 0.01
 )
+
+const (
+	ServerStatusIdle         = 1
+	ServerStatusBusy         = 2
+	ServerStatusShuttingDown = 3
+)
