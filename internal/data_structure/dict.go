@@ -15,7 +15,7 @@ type Obj struct {
 
 type Dict struct {
 	dictStore        map[string]*Obj
-	expiredDictStore map[string]uint64
+	expiredDictStore map[string]int64
 }
 
 func now() uint32 {
@@ -25,12 +25,12 @@ func now() uint32 {
 func CreateDict() *Dict {
 	dict := Dict{
 		dictStore:        make(map[string]*Obj),
-		expiredDictStore: make(map[string]uint64),
+		expiredDictStore: make(map[string]int64),
 	}
 	return &dict
 }
 
-func (d *Dict) GetExpireDictStore() map[string]uint64 {
+func (d *Dict) GetExpireDictStore() map[string]int64 {
 	return d.expiredDictStore
 }
 
@@ -49,13 +49,13 @@ func (d *Dict) NewObj(key string, value interface{}, ttlMs int64) *Obj {
 	return obj
 }
 
-func (d *Dict) GetExpiry(key string) (uint64, bool) {
+func (d *Dict) GetExpiry(key string) (int64, bool) {
 	exp, exist := d.expiredDictStore[key]
 	return exp, exist
 }
 
 func (d *Dict) SetExpiry(key string, ttlMs int64) {
-	d.expiredDictStore[key] = uint64(time.Now().UnixMilli()) + uint64(ttlMs)
+	d.expiredDictStore[key] = int64(time.Now().UnixMilli()) + int64(ttlMs)
 }
 
 func (d *Dict) HasExpired(key string) bool {
@@ -63,7 +63,7 @@ func (d *Dict) HasExpired(key string) bool {
 	if !exist {
 		return false
 	}
-	return exp <= uint64(time.Now().UnixMilli())
+	return exp <= int64(time.Now().UnixMilli())
 }
 
 func (d *Dict) Get(k string) *Obj {
