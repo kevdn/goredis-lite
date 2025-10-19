@@ -5,20 +5,45 @@ A lightweight Redis-compatible in-memory key-value store written in Go, featurin
 ## Features
 
 - **Redis Protocol Compatibility**: Supports Redis RESP protocol for seamless integration
-- **I/O Multiplexing**: Uses epoll (Linux) and kqueue (macOS) for efficient event handling
+- **Dual Architecture**: Both I/O multiplexing and share-nothing architectures
+- **Advanced Data Structures**: Sorted sets, sets, bloom filters, count-min sketches
 - **Key Expiration**: Built-in TTL support with automatic key expiration
-- **Concurrent Connections**: Handles up to 5000 concurrent connections
+- **High Performance**: Handles up to 20,000 concurrent connections
 - **Cross-Platform**: Works on Linux and macOS
 
 ## Supported Commands
 
+### Basic Commands
 - `PING` - Test server connectivity
-- `SET key value [EX seconds]` - Set a key-value pair with optional expiration
-- `GET key` - Retrieve a value by key
-- `TTL key` - Get time-to-live for a key
-- `EXPIRE key seconds` - Set expiration time for an existing key
-- `DEL key [key ...]` - Delete one or more keys
-- `EXISTS key [key ...]` - Check if keys exist
+- `SET` - Set key-value pairs with optional expiration
+- `GET` - Retrieve values by key
+- `TTL` - Get time-to-live for keys
+- `EXPIRE` - Set expiration time for existing keys
+- `DEL` - Delete one or more keys
+- `EXISTS` - Check if keys exist
+- `INFO` - Get server information
+
+### Sorted Set Commands
+- `ZADD` - Add members to sorted sets
+- `ZSCORE` - Get score of sorted set members
+- `ZRANK` - Get rank of sorted set members
+
+### Set Commands
+- `SADD` - Add members to sets
+- `SREM` - Remove members from sets
+- `SMEMBERS` - Get all members of a set
+- `SISMEMBER` - Check if member exists in set
+
+### Count-Min Sketch Commands
+- `CMS.INITBYDIM` - Initialize CMS with dimensions
+- `CMS.INITBYPROB` - Initialize CMS with probability
+- `CMS.INCRBY` - Increment counters in CMS
+- `CMS.QUERY` - Query counters from CMS
+
+### Bloom Filter Commands
+- `BF.RESERVE` - Create bloom filter
+- `BF.MADD` - Add multiple items to bloom filter
+- `BF.EXISTS` - Check if item exists in bloom filter
 
 ## Quick Start
 
@@ -84,14 +109,21 @@ OK
 
 ## Architecture
 
-### I/O Multiplexing
+GoRedis-Lite supports two distinct architectures:
 
-The server uses platform-specific I/O multiplexing:
+### I/O Multiplexing Architecture
+- **Single-threaded**: Event-driven server using platform-specific I/O multiplexing
 - **Linux**: epoll for efficient event handling
 - **macOS**: kqueue for BSD-style event notification
+- **Best for**: Low-latency applications, single-core systems
+
+### Share-Nothing Architecture
+- **Multi-worker**: Each worker maintains isolated storage
+- **Key Partitioning**: Consistent hashing for horizontal scalability
+- **No Locking**: Each worker operates independently
+- **Best for**: High-throughput applications, multi-core systems
 
 ### Key Components
-
 - **Server**: TCP server with I/O multiplexing (`internal/server/`)
 - **Core**: Command execution and RESP protocol handling (`internal/core/`)
 - **Storage**: In-memory dictionary with expiration support (`internal/data_structure/`)
