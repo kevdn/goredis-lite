@@ -18,7 +18,6 @@ func cmdPING(args []string) []byte {
 		return Encode(errors.New("ERR wrong number of arguments for 'ping' command"), false)
 	}
 	
-	time.Sleep(10 * time.Second)
 	if len(args) == 0 {
 		res = Encode("PONG", true)
 	} else {
@@ -81,7 +80,7 @@ func cmdTTL(args []string) []byte {
 		return constant.TtlKeyExistNoExpire
 	}
 
-	remainMs := exp - uint64(time.Now().UnixMilli())
+	remainMs := exp - int64(time.Now().UnixMilli())
 	if remainMs < 0 {
 		return constant.TtlKeyNotExist
 	}

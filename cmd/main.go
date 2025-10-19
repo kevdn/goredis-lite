@@ -1,12 +1,14 @@
 package main
 
 import (
+	"goredis-lite/internal/server"
+	"log"
+	"net/http"
+	_ "net/http/pprof" // for profiling
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
-
-	"goredis-lite/internal/server"
 )
 
 func main() {
@@ -15,7 +17,15 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	go server.RunIoMultiplexingServer(&wg)
+	go server.RunIoMultiplexingServer(&wg) // single-threaded
+	// s := server.NewServer()
+	// go s.StartSingleListener(&wg)
+	// go s.StartMultiListeners(&wg)
 	go server.WaitForSignal(&wg, signals)
+
+	// Expose the /debug/pprof endpoints on a separate goroutine
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	wg.Wait()
 }

@@ -7,6 +7,8 @@ participant "TCP Listener\n(serverFd)" as L
 participant "IOMultiplexer\n(Epoll|KQueue)" as M
 participant "Kernel" as K
 participant "Client Conn\n(connFd)" as C
+participant "Core Executor" as E
+participant "Global DictStore" as D
 
 == Startup ==
 S -> L: net.Listen("tcp", ":3000")
@@ -30,19 +32,20 @@ end
 
 == Event loop ==
 loop forever
-  S -> M: Wait()
+  S -> M: Wait(IOMultiplexerTimeout)
   group Linux
-    M -> K: epoll_wait(epfd, epollEvents, -1)
+    M -> K: epoll_wait(epfd, epollEvents, timeout)
     K --> M: epollEvents[0..n-1]
     M -> M: createEvent(EpollEvent)->Event{Fd, Op}
   end
   group macOS
-    M -> K: kevent(kqfd, nil, kqEvents, nil)
+    M -> K: kevent(kqfd, nil, kqEvents, timeout)
     K --> M: kqEvents[0..n-1]
     M -> M: createEvent(Kevent_t)->Event{Fd, Op}
   end
   M --> S: []Event ready
-  == Dispatch per event ==
+  
+  == Process each event ==
   loop for each Event e
     alt e.Fd == serverFd (new connection pending)
       S -> L: Accept(serverFd)
@@ -52,13 +55,19 @@ loop forever
         New client is now monitored for read
       end note
     else e.Fd is a client fd (readable)
-      S -> C: syscall.Read(connFd, buf)
+      S -> C: readCommandConn(connFd)
       alt read == 0 or error in [EOF, ECONNRESET]
         S -> C: syscall.Close(connFd)
       else data received
-        S -> C: syscall.Write(connFd, data)  // echo
+        S -> E: ExecuteAndResponse(cmd, connFd)
+        E -> D: dictStore operations
+        D --> E: result
+        E -> C: syscall.Write(connFd, response)
       end
     end
   end
+  
+  == Active Expiration (every 100ms) ==
+  S -> D: ActiveExpire()
 end
 @enduml

@@ -4,7 +4,7 @@ var (
 	Protocol          = "tcp"
 	Port              = ":3000"
 	MaxConnection     = 20000
-	MaxKeyNumber  int = 10
+	MaxKeyNumber  int = 1000000
 )
 
 var (
@@ -13,6 +13,8 @@ var (
 )
 
 var (
-	EpoolMaxSize       = 5
+	EpoolMaxSize       = 16
 	EpoolLruSampleSize = 5
 )
+
+var ListenerNumber int = 2

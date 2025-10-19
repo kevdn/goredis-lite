@@ -1,0 +1,73 @@
+@startuml
+autonumber
+actor Client
+
+participant "main.go" as M
+participant "Server\n(NewServer)" as S
+participant "IOHandler[]\n(Round-robin)" as IH
+participant "Worker[]\n(Key Partitioned)" as W
+participant "IOMultiplexer\n(Epoll|KQueue)" as IO
+participant "Worker DictStore[]\n(Isolated)" as DS
+
+== Startup ==
+M -> S: NewServer()
+note right of S
+  numCores = runtime.NumCPU()
+  numIOHandlers = numCores / 2
+  numWorkers = numCores / 2
+end note
+
+S -> W: CreateWorker(i, bufferSize) for i in [0..numWorkers)
+loop for each worker
+  W -> DS: CreateDict() - Each worker gets isolated storage
+  W -> W: go w.run() - Start worker goroutine
+end
+
+S -> IH: NewIOHandler(i, server) for i in [0..numIOHandlers)
+loop for each IO handler
+  IH -> IO: CreateIOMultiplexer()
+  IH -> IH: go handler.Run() - Start I/O handler goroutine
+end
+
+M -> S: StartSingleListener() or StartMultiListeners()
+
+== Connection Handling ==
+Client -> S: TCP Connection
+S -> IH: Round-robin assignment to IOHandler[nextIOHandler]
+IH -> IO: Monitor(Event{Fd: connFd, Op: OpRead})
+
+== Command Processing Loop ==
+loop forever
+  IH -> IO: Wait(IOMultiplexerTimeout)
+  IO --> IH: []Event ready
+  
+  loop for each Event e
+    IH -> Client: readCommandConn(connFd)
+    alt read error
+      IH -> Client: Close connection
+    else command received
+      IH -> IH: Create Task{Command, ReplyCh}
+      IH -> S: dispatch(task)
+      
+      == Key Partitioning ==
+      S -> S: getPartitionID(key) = hash(key) % numWorkers
+      S -> W: workers[workerID].TaskCh <- task
+      
+      == Worker Execution ==
+      W -> DS: Execute command on isolated dictStore
+      DS --> W: result
+      W -> IH: task.ReplyCh <- result
+      IH -> Client: Write response
+    end
+  end
+end
+
+== Share-Nothing Benefits ==
+note over S, DS
+  • Each worker has isolated storage
+  • No shared state between workers
+  • Keys are consistently partitioned
+  • Horizontal scalability
+  • No locking overhead
+end note
+@enduml
