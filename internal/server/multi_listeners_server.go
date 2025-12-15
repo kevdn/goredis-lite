@@ -1,13 +1,15 @@
 package server
 
 import (
-	"goredis-lite/internal/config"
 	"context"
-	"golang.org/x/sys/unix"
 	"log"
 	"net"
 	"sync"
 	"syscall"
+
+	"goredis-lite/internal/config"
+
+	"golang.org/x/sys/unix"
 )
 
 func createReusablePortListener(network, addr string) (net.Listener, error) {
@@ -18,7 +20,8 @@ func createReusablePortListener(network, addr string) (net.Listener, error) {
 				err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 			})
 			return err
-		}}
+		},
+	}
 	return lc.Listen(context.Background(), network, addr)
 }
 
@@ -44,8 +47,8 @@ func (s *Server) StartMultiListeners(wg *sync.WaitGroup) {
 					continue
 				}
 
-				handler := s.ioHandlers[s.nextIOHandler%s.numIOHandlers]
-				s.nextIOHandler++
+				// Use atomic operation to get next IO handler (thread-safe)
+				handler := s.ioHandlers[s.getNextIOHandler()]
 
 				if err := handler.AddConn(conn); err != nil {
 					log.Printf("Failed to add connection to I/O handler %d: %v", handler.id, err)

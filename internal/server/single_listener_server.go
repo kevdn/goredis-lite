@@ -31,8 +31,7 @@ func (s *Server) StartSingleListener(wg *sync.WaitGroup) {
 		}
 
 		// forward the new connection to an I/O handler in a round-robin manner
-		handler := s.ioHandlers[s.nextIOHandler%s.numIOHandlers]
-		s.nextIOHandler++
+		handler := s.ioHandlers[s.getNextIOHandler()]
 
 		if err := handler.AddConn(conn); err != nil {
 			log.Printf("Failed to add connection to I/O handler %d: %v", handler.id, err)

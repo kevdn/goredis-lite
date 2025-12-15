@@ -64,8 +64,16 @@ type Server struct {
 	numWorkers    int
 	numIOHandlers int
 
-	// For round-robin assigment of new connection to I/O handlers
-	nextIOHandler int
+	// For round-robin assignment of new connection to I/O handlers
+	// Use int64 for atomic operations to avoid race conditions in multi-listener mode
+	nextIOHandler int64
+}
+
+// getNextIOHandler atomically increments and returns the next IO handler index
+// This is thread-safe and eliminates race conditions when multiple listeners
+// are accepting connections concurrently (multi-listener architecture)
+func (s *Server) getNextIOHandler() int {
+	return int(atomic.AddInt64(&s.nextIOHandler, 1)-1) % s.numIOHandlers
 }
 
 func (s *Server) getPartitionID(key string) int {
